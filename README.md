@@ -2,7 +2,9 @@
 
 > Solana meme-token auto-trading bot with LLM-powered exit decisions.
 
-MoonBags listens for [SCG Alpha](https://x.com/scg_alpha) alerts, buys promising meme tokens via Jupiter, and manages exits using a configurable trail/stop or — optionally — a MiniMax M2.7 LLM that reads on-chain data (smart money flow, dev holdings, holder PnL, kline trends) every 30 seconds to decide when to sell.
+MoonBags is the **execution and management layer** on top of [SCG Alpha](https://x.com/scg_alpha)'s discovery system. SCG Alpha runs the alpha-filtering brain — they curate meme-coin signals from the firehose using the GMGN API and surface the ones worth acting on. MoonBags consumes that filtered alert stream, buys via Jupiter Ultra, then manages exits with either a configurable trail/stop or — optionally — a MiniMax M2.7 LLM that reads live on-chain data (smart money flow, dev holdings, holder PnL, kline trends) every 30 seconds to decide when to sell.
+
+In other words: **SCG Alpha picks the trades. MoonBags fires them, sizes them, watches them, and exits them.**
 
 You operate the bot through a Telegram bot (`/start`, `/positions`, `/settings`, `/sellall`, etc.) or a local web dashboard.
 
@@ -12,7 +14,7 @@ You operate the bot through a Telegram bot (`/start`, `/positions`, `/settings`,
 
 **Not financial advice.** This software is released for educational and research purposes. Using it to trade real money is your decision and your risk alone. Meme coins are extremely volatile — **you will have losing trades, and you can lose your entire wallet balance**. Nothing in this repo, the dashboard, the Telegram bot, or the LLM advisor's output constitutes investment, legal, tax, or any other kind of professional advice. Do your own research.
 
-**Third-party dependency — SCG Alpha.** MoonBags sources its trading signals from the SCG Alpha alerts API ([@scg_alpha on X](https://x.com/scg_alpha)). **I do not own, operate, or control SCG Alpha** — all credit for the signal quality goes to them. If they change their API shape, rate limits, pricing, or shut the service down entirely, the bot's alert intake stops working until the code is updated to match. You're also subject to whatever terms of service SCG Alpha imposes on their API — please review them. If you want a different signal source, you'd need to replace `src/scgPoller.ts` with your own integration.
+**Critical upstream dependency — SCG Alpha (+ GMGN).** MoonBags does not discover trades on its own. The **entire signal layer is SCG Alpha's** ([@scg_alpha on X](https://x.com/scg_alpha)) — they run an alpha-filtering system on top of the [GMGN API](https://docs.gmgn.cc/) and feed the curated alerts into the public endpoint this bot polls. **I do not own, operate, or control SCG Alpha or GMGN** — all credit for signal quality goes to them. If either changes their API shape, rate-limits you, changes pricing, or shuts down, the bot's intake stops working until the code (or the upstream provider) is updated. You're also subject to whatever terms of service SCG Alpha and GMGN impose — please review them. If you want a different upstream, replace `src/scgPoller.ts` with your own integration; the rest of the bot is signal-source agnostic.
 
 Other third-party services the bot depends on (any of which can break the bot if they change): **Jupiter Ultra** (swap execution + fees), **Helius RPC** (Solana reads), **OKX onchainos CLI** (on-chain data enrichment), **MiniMax** (LLM advisor, optional), **Telegram Bot API** (control + notifications).
 
@@ -22,34 +24,51 @@ Use at your own risk.
 
 ## Table of contents
 
-1. [What it does](#what-it-does)
-2. [Architecture at a glance](#architecture-at-a-glance)
-3. [Prerequisites](#prerequisites)
-4. [Quick start — the setup wizard (recommended)](#quick-start--the-setup-wizard-recommended)
-5. [Manual setup (reference)](#manual-setup-reference)
+1. [Where the trades come from — the discovery layer](#where-the-trades-come-from--the-discovery-layer)
+2. [What it does](#what-it-does)
+3. [Architecture at a glance](#architecture-at-a-glance)
+4. [Prerequisites](#prerequisites)
+5. [Quick start — the setup wizard (recommended)](#quick-start--the-setup-wizard-recommended)
+6. [Manual setup (reference)](#manual-setup-reference)
    - [1. Solana wallet](#1-solana-wallet)
    - [2. Helius RPC](#2-helius-rpc)
    - [3. Jupiter API key](#3-jupiter-api-key)
    - [4. OKX onchainos CLI](#4-okx-onchainos-cli)
    - [5. Telegram bot](#5-telegram-bot)
    - [6. MiniMax (optional)](#6-minimax-optional--llm-advisor)
-6. [Environment variables reference](#environment-variables-reference)
-7. [Running the bot](#running-the-bot)
-8. [Telegram commands](#telegram-commands)
-9. [LLM exit advisor](#llm-exit-advisor)
-10. [Web dashboard](#web-dashboard)
-11. [State files](#state-files)
-12. [Operating day-to-day](#operating-day-to-day)
-13. [Backtesting](#backtesting)
-14. [Troubleshooting](#troubleshooting)
-15. [Safety notes](#safety-notes)
+7. [Environment variables reference](#environment-variables-reference)
+8. [Running the bot](#running-the-bot)
+9. [Telegram commands](#telegram-commands)
+10. [LLM exit advisor](#llm-exit-advisor)
+11. [Web dashboard](#web-dashboard)
+12. [State files](#state-files)
+13. [Operating day-to-day](#operating-day-to-day)
+14. [Backtesting](#backtesting)
+15. [Troubleshooting](#troubleshooting)
+16. [Safety notes](#safety-notes)
+
+---
+
+## Where the trades come from — the discovery layer
+
+The hardest part of meme-coin trading isn't execution — it's *discovery*. Out of the thousands of tokens minted on Solana every day, which ~10 are worth your SOL?
+
+**That problem is fully solved upstream by [SCG Alpha](https://x.com/scg_alpha).** They run an alpha-filtering system that:
+
+- Pulls a constant firehose of new mints, smart-money flow, holder data, and on-chain signals via the **[GMGN API](https://docs.gmgn.cc/)**
+- Applies their own scoring + filtering logic (the secret sauce — that's their product, not mine)
+- Surfaces only the alerts that pass their criteria via a public-facing alerts API
+
+**MoonBags is downstream of that.** This bot does NOT decide which tokens are worth trading. It receives the already-curated alert stream from SCG Alpha and acts on it. Without SCG Alpha there is no MoonBags — the entire upstream "what should I buy?" question is theirs to answer.
+
+If you want to see the signal quality firsthand, follow [@scg_alpha](https://x.com/scg_alpha). If you want to swap in your own discovery source, replace `src/scgPoller.ts` with your own integration — every other layer in this bot is signal-source agnostic.
 
 ---
 
 ## What it does
 
-1. **Listens** to SCG Alpha's alerts API every 3 seconds for new meme-token signals.
-2. **Buys** new alerts that pass your filters via Jupiter Ultra (Solana DEX aggregator), spending a fixed SOL amount per trade.
+1. **Receives** filtered alerts from SCG Alpha's API every 3 seconds — these are pre-vetted by their alpha-filtering system on top of GMGN.
+2. **Buys** new alerts that pass your local filters via Jupiter Ultra (Solana DEX aggregator), spending a fixed SOL amount per trade.
 3. **Tracks** every open position every 3 seconds — pulls live prices, updates the running peak, and checks for arm/trail/stop conditions.
 4. **Arms** a trailing stop once a position hits a profit threshold (default +50%).
 5. **Exits** based on either:
@@ -63,33 +82,42 @@ Use at your own risk.
 ## Architecture at a glance
 
 ```
+        ┌──────────────────────────────────────────┐
+        │   UPSTREAM — discovery / alpha source    │
+        │   (NOT part of this repo, NOT mine)      │
+        ├──────────────────────────────────────────┤
+        │                                          │
+        │     ┌──────────┐         ┌────────────┐  │
+        │     │   GMGN   │ ──────▶ │ SCG Alpha  │  │
+        │     │   API    │  signals│  filtering │  │
+        │     │          │  + data │   engine   │  │
+        │     └──────────┘         └─────┬──────┘  │
+        │                                │ alerts  │
+        └────────────────────────────────┼─────────┘
+                                         │
+                            poll every 3s ▼
+   +-------------+   +-------------------+   +----------------+
+   |   Jupiter   |<--+      MoonBags     +-->|   Solana RPC   |
+   |  Ultra API  |   |  (this repo, the  |   |    (Helius)    |
+   |  + 0.5% ref |   |   execution layer)|   +----------------+
+   +-------------+   +-+-----------+-----+
+                       |     |     |
+       buy/sell swaps  |     |     |  on-chain data: smart money,
+                       |     |     |  dev trades, holder PnL, klines
+                       |     |     ▼
+                       |     |   +----------------+
+                       |     |   |  OKX onchainos |
+                       |     |   |      CLI       |
+                       |     |   +----------------+
+                       |     |
+                       |     ▼
+                       |   +----------------+
+                       |   |  MiniMax M2.7  |   (optional —
+                       |   |  exit advisor  |    set LLM_EXIT_ENABLED=true)
+                       |   +----------------+
+                       ▼
                   +----------------+
-                  |   SCG Alpha    |
-                  |   alerts API   |
-                  +--------+-------+
-                           |  poll every 3s
-                           v
-   +-------------+   +-----+------+   +----------------+
-   |   Jupiter   |<--+   MoonBags  +-->|   Solana RPC   |
-   |  Ultra API  |   |    bot      |   |    (Helius)    |
-   +-------------+   +-+----+----+-+   +----------------+
-                       |    |    |
-       buy/sell swaps  |    |    |  on-chain data, smart money,
-                       |    |    |  dev trades, holder PnL, klines
-                       |    |    v
-                       |    |   +----------------+
-                       |    |   |  OKX onchainos |
-                       |    |   |      CLI       |
-                       |    |   +----------------+
-                       |    |
-                       |    v
-                       |   +----------------+
-                       |   |  MiniMax M2.7  |   (optional)
-                       |   |   exit advisor |
-                       |   +----------------+
-                       v
-                  +-----+----------+
-                  |    Telegram    |
+                  |    Telegram    |   ← you control + receive alerts here
                   |  bot + alerts  |
                   +----------------+
 ```
