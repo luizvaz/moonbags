@@ -178,8 +178,14 @@ export function notifyLlmTighten(args: {
   newTrailPct: number;
   reason: string;
 }): Promise<void> {
+  // Direction-aware: the L1 upgrade allows the LLM to LOOSEN a previously-set
+  // trail (up to CONFIG.TRAIL_PCT ceiling). Keep the function name for
+  // backward-compat with existing callers, but emit the right copy per direction.
+  const loosened = args.newTrailPct > args.oldTrailPct;
+  const verb = loosened ? "loosened" : "tightened";
+  const icon = loosened ? "🔓" : "🔒";
   return send(
-    `🤖 <b>LLM tightened ${escapeHtml(args.name)}</b>  ${(args.oldTrailPct * 100).toFixed(0)}% → ${(args.newTrailPct * 100).toFixed(0)}%\n` +
+    `🤖 <b>LLM ${verb} ${escapeHtml(args.name)}</b>  ${icon} ${(args.oldTrailPct * 100).toFixed(0)}% → ${(args.newTrailPct * 100).toFixed(0)}%\n` +
     `<i>"${escapeHtml(args.reason)}"</i>\n` +
     `<a href="${gmgn(escapeHtml(args.mint))}">GMGN</a>`,
   );
