@@ -591,17 +591,64 @@ State is preserved. Positions in flight at the moment of restart are reconciled 
 
 ## Backtesting
 
-Two backtest scripts ship with the bot:
+Two scripts ship with the bot for tuning your trading params and researching individual tokens.
+
+### Grid-search backtester — `src/_backtest.ts`
+
+Fetches the **top 100 trending Solana tokens** from OKX, pulls 24 hours of kline data per token, then grid-searches every combination of `ARM_PCT × TRAIL_PCT × STOP_PCT` to find which settings would have produced the best PnL across that universe. The defaults shipped in `.env.example` were derived from this exact script.
+
+**Run with defaults (5m bars, top 15 results):**
 
 ```bash
-# Optimize ARM/TRAIL/STOP against the top 100 trending Solana tokens (24h kline history)
 npx tsx src/_backtest.ts
+```
 
-# Full snapshot of any token (price, smart money, dev, holders, etc.) — useful for ad-hoc research
+**Customize via flags:**
+
+```bash
+# Use 1-minute bars instead of 5m (denser data, slower fetch)
+npx tsx src/_backtest.ts --bar 1m
+
+# Show top 30 ranked combinations instead of 15
+npx tsx src/_backtest.ts --top 30
+
+# Skip tokens with fewer than 80 candles of data (cleaner sample)
+npx tsx src/_backtest.ts --min-candles 80
+
+# Combine
+npx tsx src/_backtest.ts --bar 5m --top 25 --min-candles 60
+```
+
+**What you'll see** — a ranked table like this:
+
+```
+ARM   TRAIL  STOP    | TOTAL PnL  | AVG/TRADE  | W / L / H | WIN%
+50%   55%    40%     | +12,840%   | +128%      | 42 / 31 / 27 | 58%
+50%   60%    40%     | +12,210%   | +122%      | 38 / 35 / 27 | 52%
+40%   55%    40%     | +11,990%   | +120%      | 44 / 29 / 27 | 60%
+...
+```
+
+- **TOTAL PnL** — sum of % returns across all simulated trades
+- **AVG/TRADE** — average % per trade
+- **W / L / H** — wins / losses / still-holding (trade hit neither stop nor trail by end of data)
+- **WIN%** — wins as % of completed trades (excluding holding)
+
+A CSV with the full grid is also written to `backtest_<timestamp>.csv` for further analysis in a spreadsheet.
+
+**Tune your `.env` from this** — the row at the top of the table is the historical optimum across the sampled universe. The current defaults (`ARM=0.5`, `TRAIL=0.55`, `STOP=0.4`) sit near the top consistently. Run periodically to spot regime shifts.
+
+> ⚠️ Past performance ≠ future results, especially in meme coins. The backtest is a sanity check, not a guarantee.
+
+### Ad-hoc on-chain snapshot — `src/_okxTest.ts`
+
+Pulls a full live snapshot of any token (price + 5m/1h/4h/24h momentum, smart-money / bundler / dev trade flow, top-10 holder PnL, liquidity pools, dev hold %, recent signals, 1m + 5m kline). Same data the LLM advisor sees, dumped to your terminal.
+
+```bash
 npx tsx src/_okxTest.ts <mint-address>
 ```
 
-The backtest fetches OHLCV from OKX, simulates entries at the first candle, and grid-searches the parameter space. Results print as a ranked table and dump to `backtest_<timestamp>.csv`.
+Useful for manually evaluating a token before whitelisting it, or debugging why the LLM made a particular decision.
 
 ---
 
