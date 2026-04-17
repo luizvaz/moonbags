@@ -65,7 +65,7 @@ function formatPosition(p: Position): string {
   const mint = `${p.mint.slice(0, 4)}…${p.mint.slice(-4)}`;
   return (
     `${icon} <b>${escapeHtml(p.name)}</b>${armed}  <code>${escapeHtml(mint)}</code>\n` +
-    `   PnL: ${pnl >= 0 ? "+" : ""}${pnl.toFixed(1)}%  peak: ${entry > 0 ? ((peak / entry - 1) * 100).toFixed(0) : "0"}%  dd: ${drawdown.toFixed(1)}%`
+    `   PnL: ${pnl >= 0 ? "+" : ""}${pnl.toFixed(1)}%  peak: ${entry > 0 ? ((peak / entry - 1) * 100).toFixed(0) : "0"}%  pullback: ${drawdown.toFixed(1)}%`
   );
 }
 
