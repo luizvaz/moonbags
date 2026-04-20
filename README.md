@@ -605,7 +605,9 @@ For each armed position, it gets a compact JSON payload with:
 - **Risk profile:** dev current holding %, dev sell status tag, LP burned %, top10 concentration, sniper status, token tags
 - **Recent signals:** smart money / KOL / whale movements scoped to this token (last 60 min)
 - **Klines:** 60 1m candles + 60 5m candles (closes + USD volumes)
-- **Deterministic evidence facts:** `bundlerDistribution`, `smartMoneySelling`, `topHolderCapitulation`, `volumeCliff`, `roundTripRisk`
+- **Deterministic evidence facts:**
+  - *Bearish (reactive):* `bundlerDistribution`, `smartMoneySelling`, `topHolderCapitulation`, `volumeCliff`, `roundTripRisk`
+  - *Proactive (sell-into-strength):* `priceAcceleration` (parabolic 1m candle), `volumeBlowoff` (5m volume ≥ 3× hourly avg), `txRatioBurst` (5m tx count ≥ 2× hourly avg), `pctFromAthSpike` (price within 5% of ATH on a +100% winner)
 - **Memory:** recent same-position decisions, global closed-trade track record, and similar historical cases when the same evidence facts appeared
 
 ### What the LLM can decide
@@ -620,6 +622,10 @@ Four actions:
 | `exit_now` | Sells the entire position immediately, bypassing the trail |
 
 The LLM **cannot** buy more or override the hard stop. Aggressive actions are hard-gated: `partial_exit` and `exit_now` are blocked unless the deterministic evidence object allows them, and trail tightening is blocked unless at least two evidence facts are active. Every non-hold reason must cite exact fact keys.
+
+The gate has two unlock paths:
+- **Bearish path:** 2+ reactive facts (existing behaviour)
+- **Proactive path:** 2+ proactive facts OR 1 proactive + 1 bearish — enables selling into strength at blow-off tops without waiting for on-chain confirmation of the reversal
 
 Each consult writes an audit record to `state/llm_audits/<mint>.json` with the exact prompt payload, evidence facts, similar-case memory, raw tool arguments, parsed decision, and gate result.
 
