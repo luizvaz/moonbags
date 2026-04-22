@@ -914,7 +914,7 @@ function formatOkxLiveFilter(status: unknown): string {
   const minHolders = firstNumber(status, [["liveFilter", "minHolders"], ["filter", "minHolders"]]);
   const walletTypes = firstNumberList(status, [["liveFilter", "walletTypes"], ["filter", "walletTypes"]]);
   const pieces = [
-    minHolders != null ? `holders >= ${minHolders.toLocaleString("en-US")}` : null,
+    minHolders != null ? `holders ≥ ${minHolders.toLocaleString("en-US")}` : null,
     `wallets ${formatOkxWalletTypes(walletTypes)}`,
   ].filter(Boolean);
   return pieces.length > 0 ? pieces.join(" · ") : "—";
@@ -1007,8 +1007,8 @@ function gmgnDiscoveryStatusLines(result: GmgnSignalStatusResult): string[] {
       : `${mode ?? "gmgn"}${running === false ? " idle" : " running"}`;
   const lines = [
     `• status: ${escapeHtml(state)}${lastScanAt ? ` · last scan ${formatAgo(Date.now() - lastScanAt)}` : ""}`,
-    `• baseline: holders >= ${formatLooseCount(minHolders)} · liq >= ${minLiquidity == null ? "—" : fmtMcap(minLiquidity)}${maxTop10 != null ? ` · top10 <= ${maxTop10 > 1 ? maxTop10.toFixed(0) : (maxTop10 * 100).toFixed(0)}%` : ""}`,
-    `• tracking: ${formatLooseCount(watched)} watched · ${formatLooseCount(minScans)} scans · holder growth >= ${holderGrowth == null ? "—" : `${holderGrowth}%`}`,
+    `• baseline: holders ≥ ${formatLooseCount(minHolders)} · liq ≥ ${minLiquidity == null ? "—" : fmtMcap(minLiquidity)}${maxTop10 != null ? ` · top10 ≤ ${maxTop10 > 1 ? maxTop10.toFixed(0) : (maxTop10 * 100).toFixed(0)}%` : ""}`,
+    `• tracking: ${formatLooseCount(watched)} watched · ${formatLooseCount(minScans)} scans · holder growth ≥ ${holderGrowth == null ? "—" : `${holderGrowth}%`}`,
     `• counts: seen ${formatLooseCount(counts.seen)} · filtered ${formatLooseCount(counts.filtered)} · accepted ${formatLooseCount(counts.accepted)}`,
     `• latest candidate: ${formatLooseCandidate(latest)}`,
     `• last rejection: ${rejection ? `<code>${escapeHtml(rejection)}</code>` : "—"}`,
