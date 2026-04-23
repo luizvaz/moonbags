@@ -1741,13 +1741,25 @@ async function handleBacktest(chatId: number, argText: string = ""): Promise<voi
       chat_id: chatId,
       text:
         "🧪 <b>Choose backtest configuration</b>\n\n" +
-        "<b>Source</b> — which candidate feed to replay forward\n" +
-        "  • <b>GMGN</b> — live signals/trenches (first-candle or after-call entry)\n" +
-        "  • <b>OKX</b> — historical OKX signal-stream events with timestamps\n\n" +
-        "<b>Grid</b> — which exit-strategy space to sweep\n" +
-        "  • <b>All</b> — trail + fixed TP + TP ladder\n" +
-        "  • <b>Hybrid</b> — above + scale-out + moonbag\n\n" +
-        "Each run fetches OHLCV, scores the top 5, and lets you tap <b>Adopt</b> to apply live (no restart).",
+        "Two phases — <b>entry filter tuning</b> and <b>exit strategy tuning</b>. " +
+        "Each has an Adopt button that writes straight to <code>state/settings.json</code>, live, no restart.\n\n" +
+        "<b>1) 🔬 Filter sweep — ENTRY thresholds</b>\n" +
+        "Harvests the source's live universe, fetches forward OHLCV, and sweeps every baseline knob " +
+        "(holders, liquidity, mcap, top10, bundler, dev, etc.) to find the thresholds that best separate " +
+        "winners (max PnL ≥ +50%) from losers. Adopt → writes to <code>signals.{source}.baseline</code>. " +
+        "Run this FIRST to pick who the bot buys.\n" +
+        "  • <b>🔬 GMGN filter sweep</b> — sweeps GMGN trending entry gates\n" +
+        "  • <b>🔬 OKX filter sweep</b> — sweeps OKX hot-tokens entry gates\n\n" +
+        "<b>2) 🟢🔵 all / hybrid — EXIT parameters</b>\n" +
+        "Assumes the bot entered every candidate and grid-searches exit strategies. Top 5 rows come back " +
+        "with per-row Adopt buttons that write to <code>exit.trail</code> / <code>exit.risk</code> / " +
+        "<code>exit.profitStrategy</code>. Run this AFTER filter sweep to tune when the bot sells.\n" +
+        "  • <b>all</b> — compares every strategy: trail, fixed-TP, TP-ladder, and a small moonbag grid\n" +
+        "  • <b>hybrid</b> — focused grid on the hybrid strategy only (trail + scale-out + moonbag) — faster\n\n" +
+        "<b>Source choices</b>\n" +
+        "  • <b>GMGN</b> — GMGN trending/trenches universe (what the GMGN source polls live)\n" +
+        "  • <b>OKX</b> — OKX hot-tokens universe (what the OKX discovery source polls live)\n\n" +
+        "<b>Recommended flow:</b> 🔬 filter sweep → Adopt → 🟢🔵 exit grid → Adopt → watch /stats for a few days → re-tune.",
       parse_mode: "HTML",
       reply_markup: {
         inline_keyboard: [
