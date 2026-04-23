@@ -516,9 +516,13 @@ async function sendAllSettingsMenu(chatId: number): Promise<void> {
   const jupLabelsDisplay = jupCfg.allowedScoreLabels.length > 0
     ? jupCfg.allowedScoreLabels.join(",")
     : "(any)";
+  const jupOrgVolDisplay = jupCfg.minOrganicVolumePct > 0 ? `${jupCfg.minOrganicVolumePct}%` : "off";
+  const jupOrgBuyersDisplay = jupCfg.minOrganicBuyersPct > 0 ? `${jupCfg.minOrganicBuyersPct}%` : "off";
   lines.push(`🔍 Jup gate: <b>${escapeHtml(jupEnabledDisplay)}</b>`);
   lines.push(`🔍 Jup minFees: <b>${jupCfg.minFees}</b>`);
   lines.push(`🔍 Jup score labels: <b>${escapeHtml(jupLabelsDisplay)}</b>`);
+  lines.push(`🔍 Jup organic vol %: <b>${jupOrgVolDisplay}</b>`);
+  lines.push(`🔍 Jup organic buyers %: <b>${jupOrgBuyersDisplay}</b>`);
   buttons.push([{ text: `Toggle 🔍 Jup gate`, callback_data: "toggle:JUP_GATE_ENABLED" }]);
   buttons.push([{ text: `Edit 🔍 Jup minFees`, callback_data: "edit:JUP_GATE_MIN_FEES" }]);
   buttons.push([{ text: `Edit 🔍 Jup score labels`, callback_data: "edit:JUP_GATE_SCORE_LABELS" }]);
