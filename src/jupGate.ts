@@ -135,9 +135,12 @@ export type JupGateResult = { ok: true } | { ok: false; reason: string };
 
 export function passesJupGate(audit: JupAudit | null, cfg: JupGateConfig): JupGateResult {
   if (!cfg.enabled) return { ok: true };
-  // Transient Jup failures (network error, 4xx, parse failure) → pass.
-  // Jup isn't load-bearing; don't block entries when Jup is down.
-  if (audit == null) return { ok: true };
+  // If Jup has no data and minFees > 0, block — a fee floor means we require fee data.
+  // If minFees is 0 (fee check disabled), still pass on null so Jup outages don't block.
+  if (audit == null) {
+    if (cfg.minFees > 0) return { ok: false, reason: "jup-gate: no Jup data (token not indexed or timeout)" };
+    return { ok: true };
+  }
 
   if (audit.fees < cfg.minFees) {
     return {
