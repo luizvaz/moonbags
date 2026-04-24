@@ -108,6 +108,11 @@ const TOKEN_2022_PROGRAM_ID = new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqC
 // Rent reclaim — close zero-balance SPL token accounts to recover locked SOL.
 // ---------------------------------------------------------------------------
 
+export type ReclaimScan = {
+  empty: number;
+  estimatedLamports: number;
+};
+
 export type ReclaimResult = {
   scanned: number;
   empty: number;
@@ -115,6 +120,33 @@ export type ReclaimResult = {
   failed: number;
   reclaimedLamports: number;
 };
+
+type ParsedTokenInfo = { parsed?: { info?: { tokenAmount?: { amount?: string } } } };
+
+function filterEmptyAccounts(accounts: Array<{ pubkey: PublicKey; account: { lamports: number; data: unknown } }>): Array<{ pubkey: PublicKey; lamports: number }> {
+  return accounts
+    .filter(({ account }) => (account.data as ParsedTokenInfo).parsed?.info?.tokenAmount?.amount === "0")
+    .map(({ pubkey, account }) => ({ pubkey, lamports: account.lamports }));
+}
+
+export async function scanEmptyTokenAccounts(): Promise<ReclaimScan> {
+  if (!CONFIG.PRIV_B58) return { empty: 0, estimatedLamports: 0 };
+  try {
+    const kp = Keypair.fromSecretKey(bs58.decode(CONFIG.PRIV_B58));
+    const conn = getConnection();
+    const [standard, ext] = await Promise.all([
+      conn.getParsedTokenAccountsByOwner(kp.publicKey, { programId: TOKEN_PROGRAM_ID_PK }),
+      conn.getParsedTokenAccountsByOwner(kp.publicKey, { programId: TOKEN_2022_PROGRAM_ID }),
+    ]);
+    const empty = [...filterEmptyAccounts(standard.value), ...filterEmptyAccounts(ext.value)];
+    return {
+      empty: empty.length,
+      estimatedLamports: empty.reduce((s, { lamports }) => s + lamports, 0),
+    };
+  } catch {
+    return { empty: 0, estimatedLamports: 0 };
+  }
+}
 
 async function closeAccountsBatch(
   conn: Connection,
@@ -185,14 +217,8 @@ export async function reclaimEmptyTokenAccounts(): Promise<ReclaimResult> {
     ]);
     result.scanned = standard.value.length + ext.value.length;
 
-    type ParsedInfo = { parsed?: { info?: { tokenAmount?: { amount?: string } } } };
-    const filterEmpty = (accounts: typeof standard.value) =>
-      accounts
-        .filter(({ account }) => (account.data as ParsedInfo).parsed?.info?.tokenAmount?.amount === "0")
-        .map(({ pubkey, account }) => ({ pubkey, lamports: account.lamports }));
-
-    const emptyStd = filterEmpty(standard.value);
-    const emptyExt = filterEmpty(ext.value);
+    const emptyStd = filterEmptyAccounts(standard.value);
+    const emptyExt = filterEmptyAccounts(ext.value);
     result.empty = emptyStd.length + emptyExt.length;
 
     if (result.empty === 0) return result;

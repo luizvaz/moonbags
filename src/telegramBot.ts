@@ -1,7 +1,7 @@
 import { CONFIG, SETTABLE_SPECS, setConfigValue as setConfigValueRaw, toggleConfigValue as toggleConfigValueRaw, type SetConfigResult, type SettableKey } from "./config.js";
 import logger from "./logger.js";
 import { getPositions, forceClosePosition, getStats, getClosedTrades, getSignalStats, type ClosedTrade } from "./positionManager.js";
-import { getWalletSolBalance, getWalletAddress, reclaimEmptyTokenAccounts, type ReclaimResult } from "./jupClient.js";
+import { getWalletSolBalance, getWalletAddress, reclaimEmptyTokenAccounts, scanEmptyTokenAccounts, type ReclaimResult } from "./jupClient.js";
 import {
   isPaused,
   setPaused,
@@ -700,7 +700,10 @@ async function applyRuntimeEdit(chatId: number, key: RuntimeSettableKey, raw: st
 
 async function sendStartMenu(chatId: number): Promise<void> {
   const stats = getStats();
-  const sol = await getWalletSolBalance().catch(() => null);
+  const [sol, rentScan] = await Promise.all([
+    getWalletSolBalance().catch(() => null),
+    scanEmptyTokenAccounts().catch(() => null),
+  ]);
   const addr = getWalletAddress();
   const open = getPositions().filter((p) => p.status === "open" || p.status === "opening");
 
@@ -725,6 +728,12 @@ async function sendStartMenu(chatId: number): Promise<void> {
       : `🧠 LLM: ⚪️ all off  <i>(/llm to enable)</i>`;
   })();
 
+  const rentEmpty = rentScan?.empty ?? 0;
+  const rentSol = rentScan ? (rentScan.estimatedLamports / 1e9) : 0;
+  const rentLine = rentEmpty > 0
+    ? `\n🔑 Reclaimable rent: <b>${rentSol.toFixed(4)} SOL</b>  (${rentEmpty} empty accounts)`
+    : ``;
+
   const text =
     `<b>🌙 MoonBags</b>  |  ${mode}\n` +
     `\n` +
@@ -735,19 +744,21 @@ async function sendStartMenu(chatId: number): Promise<void> {
     `⚙️ Buy: ${CONFIG.BUY_SIZE_SOL} SOL  ·  arm +${(CONFIG.ARM_PCT * 100).toFixed(0)}%  ·  trail ${(CONFIG.TRAIL_PCT * 100).toFixed(0)}%  ·  stop -${(CONFIG.STOP_PCT * 100).toFixed(0)}%\n` +
     `${llmLine}\n` +
     `⏱ Uptime: ${fmtUptime(stats.bootAt)}\n` +
-    `👛 Wallet: <code>${escapeHtml(shortAddr)}</code>`;
+    `👛 Wallet: <code>${escapeHtml(shortAddr)}</code>` +
+    rentLine;
+
+  const keyboard = [
+    [{ text: "📊 Positions", callback_data: "menu:positions" }, { text: "⚙️ Settings", callback_data: "menu:settings" }],
+    [{ text: "🧠 LLM modes", callback_data: "menu:llm" }, { text: "🔄 Refresh", callback_data: "menu:refresh" }],
+    ...(rentEmpty > 0 ? [[{ text: `💰 Claim rent (~${rentSol.toFixed(3)} SOL)`, callback_data: "reclaim:go" }]] : []),
+  ];
 
   await tgPost("sendMessage", {
     chat_id: chatId,
     text,
     parse_mode: "HTML",
     disable_web_page_preview: true,
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: "📊 Positions", callback_data: "menu:positions" }, { text: "⚙️ Settings", callback_data: "menu:settings" }],
-        [{ text: "🧠 LLM modes", callback_data: "menu:llm" }, { text: "🔄 Refresh", callback_data: "menu:refresh" }],
-      ],
-    },
+    reply_markup: { inline_keyboard: keyboard },
   });
 }
 
@@ -868,6 +879,12 @@ async function handleCallback(cq: NonNullable<Update["callback_query"]>): Promis
   if (data === "menu:refresh") {
     await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Refreshed" });
     await sendStartMenu(chatId);
+    return;
+  }
+
+  if (data === "reclaim:go") {
+    await tgPost("answerCallbackQuery", { callback_query_id: cq.id, text: "Reclaiming..." });
+    await handleReclaim(chatId);
     return;
   }
 
