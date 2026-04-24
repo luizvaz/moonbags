@@ -1285,23 +1285,25 @@ type DeepDiveResult =
 async function deepDiveCandidate(seed: GmgnSignalCandidate): Promise<DeepDiveResult> {
   let info: Record<string, unknown> | null = null;
   let security: Record<string, unknown> | null = null;
-  let enrichFailed = false;
-  try {
-    const [infoRes, securityRes] = await Promise.all([
-      getTokenInfo(seed.chain, seed.mint),
-      getTokenSecurity(seed.chain, seed.mint),
-    ]);
-    info = (infoRes ?? null) as Record<string, unknown> | null;
-    security = (securityRes ?? null) as Record<string, unknown> | null;
-  } catch (err) {
-    enrichFailed = true;
-    logger.warn(
-      { err: (err as Error).message, mint: seed.mint, source: seed.source },
-      "[gmgn-source] deep-dive enrichment failed — proceeding on seed data",
-    );
-    // Network error: don't drop. Trending seeds already carry holders/liquidity/
-    // top10/smart-money from /v1/market/rank, so baseline already ran on real data.
-    // Jup gate still runs below for the quality floor.
+
+  // Only fetch info/security for sparse sources (signal, trenches).
+  // Trending and watchlist seeds arrive pre-enriched from /v1/market/rank —
+  // the deep-dive calls add nothing and only burn rate-limit quota.
+  const needsEnrichment = seed.source === "signal" || seed.source === "trenches";
+  if (needsEnrichment) {
+    try {
+      const [infoRes, securityRes] = await Promise.all([
+        getTokenInfo(seed.chain, seed.mint),
+        getTokenSecurity(seed.chain, seed.mint),
+      ]);
+      info = (infoRes ?? null) as Record<string, unknown> | null;
+      security = (securityRes ?? null) as Record<string, unknown> | null;
+    } catch (err) {
+      logger.warn(
+        { err: (err as Error).message, mint: seed.mint, source: seed.source },
+        "[gmgn-source] deep-dive enrichment failed — proceeding on seed data",
+      );
+    }
   }
 
   const next: GmgnSignalCandidate = { ...seed, sourceMeta: { ...seed.sourceMeta } };
@@ -1359,11 +1361,7 @@ async function deepDiveCandidate(seed: GmgnSignalCandidate): Promise<DeepDiveRes
 
   next.sourceMeta = {
     ...next.sourceMeta,
-    deepDive: {
-      info: info ?? null,
-      security: security ?? null,
-      ...(enrichFailed ? { enrichFailed: true } : {}),
-    },
+    deepDive: { info: info ?? null, security: security ?? null },
   };
 
   // Refresh score + alert so /sources-status and downstream consumers
