@@ -701,12 +701,24 @@ async function sendStartMenu(chatId: number): Promise<void> {
   const open = getPositions().filter((p) => p.status === "open" || p.status === "opening");
 
   const armed = open.filter((p) => p.armed).length;
-  const llmActive = CONFIG.LLM_EXIT_ENABLED && Boolean(CONFIG.LLM_API_KEY);
+  const keySet = Boolean(CONFIG.LLM_API_KEY);
+  const entryOn = CONFIG.LLM_ENTRY_ENABLED && keySet;
+  const exitOn = CONFIG.LLM_EXIT_ENABLED && keySet;
+  const immediateOn = CONFIG.LLM_EXIT_IMMEDIATE && keySet;
   const mode = stats.dryRun ? "🧪 DRY" : "🟢 LIVE";
   const pnlIcon = stats.realizedPnlSol >= 0 ? "🟢" : "🔴";
   const pnlSign = stats.realizedPnlSol >= 0 ? "+" : "";
-  const llmIcon = llmActive ? "🤖 ON" : "⚪️ OFF";
   const shortAddr = addr ? `${addr.slice(0, 4)}…${addr.slice(-4)}` : "—";
+
+  const llmLine = (() => {
+    if (!keySet) return `🧠 LLM: <i>no API key set</i>`;
+    const parts: string[] = [];
+    if (entryOn) parts.push("🚪 entry");
+    if (exitOn) parts.push(`📤 exit${immediateOn ? " ⚡immediate" : ""}`);
+    return parts.length > 0
+      ? `🧠 LLM: <b>${parts.join("  +  ")}</b>`
+      : `🧠 LLM: ⚪️ all off  <i>(/llm to enable)</i>`;
+  })();
 
   const text =
     `<b>🌙 MoonBags</b>  |  ${mode}\n` +
@@ -715,8 +727,8 @@ async function sendStartMenu(chatId: number): Promise<void> {
     `📊 Open positions: <b>${open.length}</b> / ${stats.maxConcurrent}  ${armed > 0 ? `(${armed} armed ⚡)` : ""}\n` +
     `${pnlIcon} Realized PnL: <b>${pnlSign}${stats.realizedPnlSol.toFixed(4)} SOL</b>\n` +
     `\n` +
-    `⚙️ Buy size: ${CONFIG.BUY_SIZE_SOL} SOL  |  arm: +${(CONFIG.ARM_PCT * 100).toFixed(0)}%  trail: ${(CONFIG.TRAIL_PCT * 100).toFixed(0)}%  stop: -${(CONFIG.STOP_PCT * 100).toFixed(0)}%\n` +
-    `🧠 LLM advisor: ${llmIcon}\n` +
+    `⚙️ Buy: ${CONFIG.BUY_SIZE_SOL} SOL  ·  arm +${(CONFIG.ARM_PCT * 100).toFixed(0)}%  ·  trail ${(CONFIG.TRAIL_PCT * 100).toFixed(0)}%  ·  stop -${(CONFIG.STOP_PCT * 100).toFixed(0)}%\n` +
+    `${llmLine}\n` +
     `⏱ Uptime: ${fmtUptime(stats.bootAt)}\n` +
     `👛 Wallet: <code>${escapeHtml(shortAddr)}</code>`;
 
@@ -728,7 +740,7 @@ async function sendStartMenu(chatId: number): Promise<void> {
     reply_markup: {
       inline_keyboard: [
         [{ text: "📊 Positions", callback_data: "menu:positions" }, { text: "⚙️ Settings", callback_data: "menu:settings" }],
-        [{ text: "🔄 Refresh", callback_data: "menu:refresh" }],
+        [{ text: "🧠 LLM modes", callback_data: "menu:llm" }, { text: "🔄 Refresh", callback_data: "menu:refresh" }],
       ],
     },
   });
@@ -826,6 +838,12 @@ async function handleCallback(cq: NonNullable<Update["callback_query"]>): Promis
       text: `Immediate exit: ${now ? "⚡ ON" : "⚪️ OFF"}`,
       show_alert: false,
     });
+    await handleLlm(chatId, "");
+    return;
+  }
+
+  if (data === "menu:llm") {
+    await tgPost("answerCallbackQuery", { callback_query_id: cq.id });
     await handleLlm(chatId, "");
     return;
   }
