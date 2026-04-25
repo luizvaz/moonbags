@@ -77,6 +77,7 @@ export interface Position {
   dynamicTrailPct?: number;       // when set, overrides CONFIG.TRAIL_PCT for this position
   lastLlmCheckAt?: number;        // throttle: don't ask LLM more than once per LLM_POLL_MS
   llmActiveNotified?: boolean;    // dedupe: only send "LLM watching" once per position
+  lastLlmAction?: string;         // last LLM action: "hold" | "set_trail" | "exit_now" | "partial_exit"
   lastLlmReason?: string;         // surfaced in the SELL Telegram message when LLM triggers exit
   llmWatchStartedAt?: number;     // timestamp when LLM first picked up this position
   lastLlmHeartbeatAt?: number;    // timestamp of most recent heartbeat notification

@@ -1336,7 +1336,8 @@ export async function tickLlmHeartbeat(): Promise<void> {
       mint: p.mint,
       pnlPct,
       trailFloorSol,
-      lastDecision: p.lastLlmReason ?? "hold",
+      lastAction: p.lastLlmAction ?? "hold",
+      lastReason: p.lastLlmReason ?? "no decision yet",
       watchingMins,
     });
   }
@@ -1414,6 +1415,9 @@ async function consultOnePosition(position: Position): Promise<void> {
 
   if (decision.action === "hold") {
     logger.debug({ mint: position.mint, reason: decision.reason }, "[llm] hold");
+    position.lastLlmAction = "hold";
+    position.lastLlmReason = decision.reason;
+    markDirty();
     return;
   }
 
@@ -1426,6 +1430,7 @@ async function consultOnePosition(position: Position): Promise<void> {
     }
     const direction = decision.newTrailPct < oldTrail ? "tightened" : "loosened";
     position.dynamicTrailPct = decision.newTrailPct;
+    position.lastLlmAction = "set_trail";
     position.lastLlmReason = decision.reason;
     markDirty();
     logger.info(
@@ -1447,6 +1452,7 @@ async function consultOnePosition(position: Position): Promise<void> {
 
   if (decision.action === "exit_now") {
     logger.info({ mint: position.mint, reason: decision.reason }, "[llm] exit triggered");
+    position.lastLlmAction = "exit_now";
     position.lastLlmReason = decision.reason;
     markDirty();
     await closePosition(position.mint, "llm");
