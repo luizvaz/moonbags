@@ -391,6 +391,9 @@ async function main(): Promise<void> {
   if (!existingEnv.match(/^SCG_POLL_MS=/m)) collected.SCG_POLL_MS = "3000";
   if (!existingEnv.match(/^PRICE_POLL_MS=/m)) collected.PRICE_POLL_MS = "3000";
   if (!existingEnv.match(/^LLM_POLL_MS=/m)) collected.LLM_POLL_MS = "30000";
+  if (!existingEnv.match(/^LLM_HEARTBEAT_MINS=/m)) collected.LLM_HEARTBEAT_MINS = "15";
+  if (!existingEnv.match(/^MILESTONES_ENABLED=/m)) collected.MILESTONES_ENABLED = "true";
+  if (!existingEnv.match(/^MILESTONE_PCTS=/m)) collected.MILESTONE_PCTS = "100,200,500,1000";
   if (!existingEnv.match(/^OKX_WSS_ENABLED=/m)) collected.OKX_WSS_ENABLED = "false";
   if (!existingEnv.match(/^SLIPPAGE_BPS=/m)) collected.SLIPPAGE_BPS = "2500";
   if (!existingEnv.match(/^MAX_ALERT_AGE_MINS=/m)) collected.MAX_ALERT_AGE_MINS = "0";

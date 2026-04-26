@@ -449,6 +449,7 @@ MAX_ALERT_MCAP=0              # only buy alerts at or below this mcap ($). Also 
 SCG_POLL_MS=3000               # how often to poll SCG for new alerts
 PRICE_POLL_MS=3000             # how often to update prices for open positions
 LLM_POLL_MS=30000              # how often the LLM advisor checks armed positions
+LLM_HEARTBEAT_MINS=15          # LLM sends a rich check-in per watched position every N minutes (0 = off). Also editable live via /llm
 OKX_WSS_ENABLED=false          # optional WSS acceleration for open positions only
 
 # === EXECUTION ===
@@ -530,7 +531,15 @@ pm2 save           # persist across reboot
 pm2 startup        # follow instructions to enable on boot
 ```
 
-**Option B — `systemd`** (Linux):
+**Option B — Docker (any OS — recommended for most users):**
+```bash
+cp .env.example .env   # fill in your keys
+docker compose up -d   # builds, starts, auto-restarts on crash
+docker compose logs -f # watch logs
+```
+Positions and settings are written to `./state/` on your host so they survive container restarts. The dashboard is available at `http://localhost:8787`.
+
+**Option C — `systemd`** (Linux):
 Create `/etc/systemd/system/moonbags.service`:
 ```ini
 [Unit]
@@ -602,7 +611,8 @@ Every command is gated to the `TELEGRAM_CHAT_ID` in `.env` — random users who 
 | `/backtest [source] [hybrid]` | Run the exit-strategy backtester. Source: `gmgn` (default) pulls fresh calls from GMGN signals/trenches/trending; `scg` is retained but disabled. Add `hybrid` to switch the grid to trail + scale-out + moonbag. Examples: `/backtest`, `/backtest hybrid`, `/backtest gmgn hybrid`. Tap a row to adopt the exit strategy live. |
 | `/backtest_hybrid` | Alias for `/backtest hybrid` — same source default, hybrid exit grid. |
 | `/doctor` | Run a health check from Telegram. Use this when the bot starts, after changing `.env`, or when something feels off. Mirrors `npm run doctor`. |
-| `/ping` | Live connectivity check for SCG polling, Telegram delivery, source-mode status, and optional OKX WSS runtime state. |
+| `/ping` | Live connectivity check: GMGN/OKX source status, Telegram delivery, OKX WSS state, and **position tick health** (flags ⚠️ if the tick loop appears stuck). |
+| `/dismiss <mint>` | Remove a ghost position from state without attempting a sell (use after a manual on-chain exit or to clear a failed buy that left stale state). |
 | `/setup_status` | Show a plain-English setup checklist: credentials, wallet, Telegram, OKX OnchainOS, and remaining fixes. |
 | `/update` | Check `origin/main`, show incoming commits, then pull + restart through `pm2` after confirmation. Requires `git` and a `pm2` process named `moonbags`. |
 
