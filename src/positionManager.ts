@@ -497,8 +497,6 @@ export async function openPosition(alert: ScgAlert): Promise<Position | null> {
     logger.debug({ mint: alert.mint, name: alert.name }, "[open] skipped — mint already bought before");
     return null;
   }
-  everBoughtMints.add(alert.mint);
-  markDirty();
 
   const placeholder: Position = {
     mint: alert.mint,
@@ -572,6 +570,7 @@ export async function openPosition(alert: ScgAlert): Promise<Position | null> {
     },
   };
   positions.set(alert.mint, position);
+  everBoughtMints.add(alert.mint);
   await flushPersist();
   void watchOkxWsMint(alert.mint);
 
